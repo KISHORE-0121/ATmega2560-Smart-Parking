@@ -26,7 +26,7 @@ void PWM_Init(void)
      * OC3A / PE3 as OUTPUT
      */
 
-    GPIO_SetIO(&DDRE, 3, OUTPUT);
+    SETIO(&DDRE, 3, OUTPUT);
 
 
     /*
