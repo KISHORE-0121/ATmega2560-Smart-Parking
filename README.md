@@ -33,9 +33,7 @@ The repository contains custom driver modules and related embedded code organize
 🚧 Project under development.
 
 ## Team
-- Team Member 1
-- Team Member 2
-- Team Member 3
+To be updated.
 
 ## License
 This project is developed for educational and hackathon purposes.
