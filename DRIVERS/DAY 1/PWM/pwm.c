@@ -26,7 +26,7 @@
 #define TCCR3A (*(volatile uint8_t *)0x90)
 #define TCCR3B (*(volatile uint8_t *)0x91)
 
-#define OCR3A  (*(volatile uint8_t *)0x97)
+#define OCR3A  (*(volatile uint8_t *)0x98)
 
 
 /* ============================================================
