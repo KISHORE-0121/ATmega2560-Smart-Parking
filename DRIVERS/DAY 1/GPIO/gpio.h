@@ -65,7 +65,7 @@
 
 /* Function declarations */
 
-void GPIO_SetIO(volatile uint8_t *DDR, uint8_t pin, uint8_t mode);
+void SETIO(volatile uint8_t *DDR, uint8_t pin, uint8_t mode);
 
 void GPIO_Write(volatile uint8_t *PORT, uint8_t pin, uint8_t value);
 
