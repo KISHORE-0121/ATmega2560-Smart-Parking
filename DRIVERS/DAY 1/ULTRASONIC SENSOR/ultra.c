@@ -1,46 +1,146 @@
 #include "ultra.h"
 
-/* ============================================================
-   ATmega2560 PORT B Registers
-   ============================================================ */
-
-#define PINB    (*(volatile unsigned char *)0x23)
-#define DDRB    (*(volatile unsigned char *)0x24)
-#define PORTB   (*(volatile unsigned char *)0x25)
-
 
 /* ============================================================
-   ATmega2560 TIMER1 Registers
+   ATmega2560 ULTRASONIC DRIVER
+
+   SENSOR:
+   HC-SR04 / compatible ultrasonic sensor
+
+   TRIGGER:
+   PB1
+
+   ECHO:
+   PB2
+
+
+   TIMER:
+   TIMER4
+
+   TIMER MODE:
+   Normal Mode
+
+   CPU CLOCK:
+   16 MHz
+
+   PRESCALER:
+   8
+
+   TIMER CLOCK:
+
+   16 MHz / 8
+   = 2 MHz
+
+   TIMER TICK:
+
+   1 / 2 MHz
+   = 0.5 us
    ============================================================ */
-
-#define TCCR1A  (*(volatile unsigned char *)0x80)
-#define TCCR1B  (*(volatile unsigned char *)0x81)
-
-#define TCNT1L  (*(volatile unsigned char *)0x84)
-#define TCNT1H  (*(volatile unsigned char *)0x85)
-
-#define TCNT1   (*(volatile unsigned int  *)0x84)
 
 
 /* ============================================================
-   Ultrasonic Pins
+   PORT B REGISTERS
    ============================================================ */
 
-#define TRIG_BIT    1       /* PB1 */
-#define ECHO_BIT    2       /* PB2 */
+#define PINB  (*(volatile uint8_t *)0x23)
+#define DDRB  (*(volatile uint8_t *)0x24)
+#define PORTB (*(volatile uint8_t *)0x25)
 
 
 /* ============================================================
-   Timer settings
-   ATmega2560 = 16 MHz
-   Prescaler = 8
-
-   Timer frequency:
-   16 MHz / 8 = 2 MHz
-
-   One timer tick:
-   1 / 2 MHz = 0.5 us
+   TIMER4 REGISTERS
    ============================================================ */
+
+#define TCCR4A (*(volatile uint8_t *)0xA0)
+#define TCCR4B (*(volatile uint8_t *)0xA1)
+
+#define TCNT4L (*(volatile uint8_t *)0xA4)
+#define TCNT4H (*(volatile uint8_t *)0xA5)
+
+
+/* ============================================================
+   ULTRASONIC PINS
+   ============================================================ */
+
+#define TRIG_BIT 1       /* PB1 */
+#define ECHO_BIT 2       /* PB2 */
+
+
+/* ============================================================
+   TIMER SETTINGS
+   ============================================================ */
+
+#define ULTRA_TIMEOUT_TICKS 50000U
+
+
+/*
+   50000 ticks × 0.5 us
+   = 25000 us
+   = 25 ms
+
+   This gives a reasonable timeout for a
+   parking-distance application.
+*/
+
+
+/* ============================================================
+   ULTRA_TIMER_RESET
+   ============================================================ */
+
+static void ULTRA_TimerReset(void)
+{
+    TCNT4H = 0x00;
+    TCNT4L = 0x00;
+}
+
+
+/* ============================================================
+   ULTRA_TimerRead
+   ============================================================ */
+
+static uint16_t ULTRA_TimerRead(void)
+{
+    uint8_t low;
+    uint8_t high;
+
+    /*
+       Read low byte first.
+    */
+
+    low = TCNT4L;
+
+    /*
+       Then read high byte.
+    */
+
+    high = TCNT4H;
+
+    return ((uint16_t)high << 8) | low;
+}
+
+
+/* ============================================================
+   ULTRA_Delay10us
+   ============================================================ */
+
+static void ULTRA_Delay10us(void)
+{
+    /*
+       Timer4 tick = 0.5 us
+
+       10 us / 0.5 us
+       = 20 ticks
+    */
+
+    ULTRA_TimerReset();
+
+    while (ULTRA_TimerRead() < 20U)
+    {
+        /*
+           Wait approximately 10 us
+        */
+    }
+}
 
 
 /* ============================================================
@@ -49,48 +149,52 @@
 
 void ULTRA_Init(void)
 {
-    /* TRIG = OUTPUT */
+    /* --------------------------------------------------------
+       TRIG = OUTPUT
+       -------------------------------------------------------- */
+
     DDRB |= (1 << TRIG_BIT);
 
-    /* ECHO = INPUT */
+
+    /* --------------------------------------------------------
+       ECHO = INPUT
+       -------------------------------------------------------- */
+
     DDRB &= ~(1 << ECHO_BIT);
 
-    /* TRIG initially LOW */
+
+    /* --------------------------------------------------------
+       TRIG initially LOW
+       -------------------------------------------------------- */
+
     PORTB &= ~(1 << TRIG_BIT);
 
 
     /* --------------------------------------------------------
-       Timer1 Normal Mode
+       TIMER4 NORMAL MODE
        -------------------------------------------------------- */
 
-    TCCR1A = 0x00;
+    TCCR4A = 0x00;
+
 
     /*
-       CS11 = 1
+       Timer4:
 
-       Timer clock:
-       F_CPU / 8
+       CS42 = 0
+       CS41 = 1
+       CS40 = 0
+
+       Prescaler = 8
     */
-    TCCR1B = (1 << 1);
 
-    /* Reset timer */
-    TCNT1 = 0;
-}
+    TCCR4B = (1 << 1);
 
 
-/* ============================================================
-   Small delay using Timer1
-   ============================================================ */
+    /* --------------------------------------------------------
+       Reset timer
+       -------------------------------------------------------- */
 
-static void ULTRA_Delay10us(void)
-{
-    TCNT1 = 0;
-
-    while (TCNT1 < 20)
-    {
-        /* Wait approximately 10 us
-           20 ticks × 0.5 us = 10 us */
-    }
+    ULTRA_TimerReset();
 }
 
 
@@ -100,47 +204,65 @@ static void ULTRA_Delay10us(void)
 
 unsigned int ULTRA_GetDistanceCm(void)
 {
-    unsigned int start_time;
-    unsigned int end_time;
-    unsigned int echo_time;
+    uint16_t start_time;
+    uint16_t end_time;
+    uint16_t echo_time;
 
 
     /* --------------------------------------------------------
-       Make sure TRIG is LOW
+       Make sure trigger is LOW
        -------------------------------------------------------- */
 
     PORTB &= ~(1 << TRIG_BIT);
+
+
+    /*
+       Small settling delay
+    */
 
     ULTRA_Delay10us();
 
 
     /* --------------------------------------------------------
-       Send ultrasonic trigger pulse
+       Send trigger pulse
        -------------------------------------------------------- */
 
     PORTB |= (1 << TRIG_BIT);
 
+
+    /*
+       Trigger HIGH for approximately 10 us
+    */
+
     ULTRA_Delay10us();
 
+
+    /*
+       End trigger pulse
+    */
+
     PORTB &= ~(1 << TRIG_BIT);
+
+
+    /* --------------------------------------------------------
+       Reset Timer4
+       -------------------------------------------------------- */
+
+    ULTRA_TimerReset();
 
 
     /* --------------------------------------------------------
        Wait for ECHO to become HIGH
        -------------------------------------------------------- */
 
-    TCNT1 = 0;
-
     while ((PINB & (1 << ECHO_BIT)) == 0)
     {
         /*
-           Timeout protection.
-
-           If ECHO does not become HIGH,
-           don't wait forever.
+           If ECHO never becomes HIGH,
+           return 0 instead of waiting forever.
         */
 
-        if (TCNT1 > 60000)
+        if (ULTRA_TimerRead() > ULTRA_TIMEOUT_TICKS)
         {
             return 0;
         }
@@ -153,7 +275,7 @@ unsigned int ULTRA_GetDistanceCm(void)
        Save starting time
        -------------------------------------------------------- */
 
-    start_time = TCNT1;
+    start_time = ULTRA_TimerRead();
 
 
     /* --------------------------------------------------------
@@ -163,10 +285,14 @@ unsigned int ULTRA_GetDistanceCm(void)
     while ((PINB & (1 << ECHO_BIT)) != 0)
     {
         /*
-           Timeout protection
+           Timeout protection.
+
+           Unsigned subtraction also handles
+           timer wrap-around correctly.
         */
 
-        if ((unsigned int)(TCNT1 - start_time) > 60000)
+        if ((uint16_t)(ULTRA_TimerRead() - start_time)
+            > ULTRA_TIMEOUT_TICKS)
         {
             return 0;
         }
@@ -177,7 +303,7 @@ unsigned int ULTRA_GetDistanceCm(void)
        Save ending time
        -------------------------------------------------------- */
 
-    end_time = TCNT1;
+    end_time = ULTRA_TimerRead();
 
 
     /* --------------------------------------------------------
@@ -192,14 +318,17 @@ unsigned int ULTRA_GetDistanceCm(void)
 
        Timer tick = 0.5 us
 
+       echo_time × 0.5
+       = time in microseconds
+
+       Distance(cm)
+       ≈ time(us) / 58
+
        Therefore:
 
-       echo_time × 0.5 = microseconds
-
-       Distance(cm) ≈ time(us) / 58
-
-       Distance ≈ echo_time / 116
+       Distance
+       ≈ echo_time / 116
        -------------------------------------------------------- */
 
-    return (echo_time / 116);
+    return (unsigned int)(echo_time / 116U);
 }
