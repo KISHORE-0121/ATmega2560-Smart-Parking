@@ -20,14 +20,14 @@ void OUT_WRITE(volatile uint8_t *PORT,
         *PORT &= ~(1 << pin);
 }
 
-uint8_t GPIO_Read(volatile uint8_t *PIN,
-                  uint8_t pin)
+uint8_t READ(volatile uint8_t *PIN,
+             uint8_t pin)
 {
     return ((*PIN >> pin) & 1);
 }
 
-void GPIO_Toggle(volatile uint8_t *PORT,
-                 uint8_t pin)
+void TOGGLE(volatile uint8_t *PORT,
+            uint8_t pin)
 {
     *PORT ^= (1 << pin);
 }
