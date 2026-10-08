@@ -1,8 +1,8 @@
 #include "gpio.h"
 
-void GPIO_SetIO(volatile uint8_t *DDR,
-                uint8_t pin,
-                uint8_t mode)
+void SETIO(volatile uint8_t *DDR,
+           uint8_t pin,
+           uint8_t mode)
 {
     if (mode == OUTPUT)
         *DDR |= (1 << pin);
