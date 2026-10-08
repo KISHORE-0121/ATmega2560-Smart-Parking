@@ -71,7 +71,7 @@ void ADC_Init(void)
      * Disable digital input on ADC0-ADC7
      */
 
-    DIDR0 = 0x00;
+    DIDR0 = 0xFF;
 }
 
 
