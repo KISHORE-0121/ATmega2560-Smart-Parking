@@ -72,22 +72,22 @@ void SEG7_Init(void)
      * All 8 pins are outputs
      */
 
-    GPIO_SetIO(&DDRA, 0, OUTPUT);
-    GPIO_SetIO(&DDRA, 1, OUTPUT);
-    GPIO_SetIO(&DDRA, 2, OUTPUT);
-    GPIO_SetIO(&DDRA, 3, OUTPUT);
-    GPIO_SetIO(&DDRA, 4, OUTPUT);
-    GPIO_SetIO(&DDRA, 5, OUTPUT);
-    GPIO_SetIO(&DDRA, 6, OUTPUT);
-    GPIO_SetIO(&DDRA, 7, OUTPUT);
+    SETIO(&DDRA, 0, OUTPUT);
+    SETIO(&DDRA, 1, OUTPUT);
+    SETIO(&DDRA, 2, OUTPUT);
+    SETIO(&DDRA, 3, OUTPUT);
+    SETIO(&DDRA, 4, OUTPUT);
+    SETIO(&DDRA, 5, OUTPUT);
+    SETIO(&DDRA, 6, OUTPUT);
+    SETIO(&DDRA, 7, OUTPUT);
 
 
     /*
      * Digit select pins
      */
 
-    GPIO_SetIO(&DDRC, 0, OUTPUT);
-    GPIO_SetIO(&DDRC, 1, OUTPUT);
+    SETIO(&DDRC, 0, OUTPUT);
+    SETIO(&DDRC, 1, OUTPUT);
 
 
     /*
@@ -96,8 +96,8 @@ void SEG7_Init(void)
 
     PORTA = 0x00;
 
-    GPIO_Write(&PORTC, 0, LOW);
-    GPIO_Write(&PORTC, 1, LOW);
+    OUT_WRITE(&PORTC, 0, LOW);
+    OUT_WRITE(&PORTC, 1, LOW);
 }
 
 
@@ -173,6 +173,6 @@ void SEG7_Clear(void)
 {
     PORTA = 0x00;
 
-    GPIO_Write(&PORTC, 0, LOW);
-    GPIO_Write(&PORTC, 1, LOW);
+    OUT_WRITE(&PORTC, 0, LOW);
+    OUT_WRITE(&PORTC, 1, LOW);
 }
