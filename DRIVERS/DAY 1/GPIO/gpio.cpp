@@ -10,9 +10,9 @@ void SETIO(volatile uint8_t *DDR,
         *DDR &= ~(1 << pin);
 }
 
-void GPIO_Write(volatile uint8_t *PORT,
-                uint8_t pin,
-                uint8_t value)
+void OUT_WRITE(volatile uint8_t *PORT,
+               uint8_t pin,
+               uint8_t value)
 {
     if (value == HIGH)
         *PORT |= (1 << pin);
