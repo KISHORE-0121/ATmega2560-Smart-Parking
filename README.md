@@ -29,11 +29,5 @@ This project is designed to monitor parking slots and assist with parking using 
 ## Project Structure
 The repository contains custom driver modules and related embedded code organized under the `DRIVERS` folder.
 
-## Status
-🚧 Project under development.
-
-## Team
-To be updated.
-
 ## License
 This project is developed for educational and hackathon purposes.
