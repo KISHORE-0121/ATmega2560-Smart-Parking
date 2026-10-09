@@ -1,149 +1,65 @@
+
 #include "pwm.h"
 #include "gpio.h"
+#include "timer.h"
 
-/* ============================================================
-   ATmega2560 TIMER3 - CHANNEL A
+/*
+ * PWM output:
+ * OC3A = PE3 = Arduino Mega D5
+ * Timer used: Timer3
+ * Mode: 8-bit Fast PWM
+ * Prescaler: 64
+ */
 
-   PWM OUTPUT:
-   OC3A = PE3
-
-   PWM MODE:
-   Fast PWM 8-bit
-
-   PWM FREQUENCY:
-   F_CPU = 16 MHz
-   Prescaler = 64
-
-   PWM frequency:
-
-   16 MHz / (64 × 256)
-   = 976.56 Hz
-   ============================================================ */
-
-
-/* ---------- TIMER3 REGISTERS ---------- */
-
-#define TCCR3A (*(volatile uint8_t *)0x90)
-#define TCCR3B (*(volatile uint8_t *)0x91)
-
-#define OCR3A  (*(volatile uint8_t *)0x98)
-
-
-/* ============================================================
-   PWM_Init
-   ============================================================ */
-
+/* Initialize PWM hardware */
 void PWM_Init(void)
 {
-    /* --------------------------------------------------------
-       PE3 / OC3A as OUTPUT
-       -------------------------------------------------------- */
-
+    /* Configure PE3 as output */
     SETIO(&DDRE, 3, OUTPUT);
 
+    /* Select non-inverting Fast PWM mode */
+    TCCR3A = (1 << COM3A1) | (1 << WGM30);
+    TCCR3B = (1 << WGM32);
 
-    /* --------------------------------------------------------
-       Timer3 Fast PWM 8-bit
-
-       WGM30 = 1
-       WGM31 = 0
-       WGM32 = 1
-       WGM33 = 0
-
-       Mode = Fast PWM 8-bit
-
-       COM3A1 = 1
-       COM3A0 = 0
-
-       Non-inverting PWM
-       -------------------------------------------------------- */
-
-    TCCR3A = (1 << 7) |
-             (1 << 0);
-
-
-    /*
-       Timer stopped initially.
-
-       WGM32 = 1
-       CS32:0 = 000
-
-       Timer clock = stopped
-    */
-
-    TCCR3B = (1 << 3);
-
-
-    /* --------------------------------------------------------
-       Initial duty cycle = 0%
-       -------------------------------------------------------- */
-
-    OCR3A = 0;
+    /* Set initial duty cycle to 0% */
+    OCR3AH = 0;
+    OCR3AL = 0;
 }
 
-
-/* ============================================================
-   PWM_SetDuty
-   ============================================================ */
-
+/* Set PWM duty cycle (0 to 100%) */
 void PWM_SetDuty(uint8_t duty)
 {
-    /*
-       Limit duty cycle to 0-100%
-    */
+    uint16_t value;
 
+    /* Limit duty cycle to 100% */
     if (duty > 100)
-    {
         duty = 100;
-    }
 
+    /* Convert percentage to 8-bit compare value */
+    value = ((uint16_t)duty * 255) / 100;
 
-    /*
-       Convert:
-
-       0%   -> 0
-       50%  -> 127
-       100% -> 255
-    */
-
-    OCR3A = (uint8_t)(((uint16_t)duty * 255U) / 100U);
+    /* Write the compare value to OCR3A */
+    OCR3AH = 0;
+    OCR3AL = (uint8_t)value;
 }
 
-
-/* ============================================================
-   PWM_Start
-   ============================================================ */
-
+/* Start PWM using prescaler 64 */
 void PWM_Start(void)
 {
-    /*
-       Timer3 clock:
+    /* Clear the Timer3 clock-select bits */
+    TCCR3B &= ~((1 << CS32) |
+                (1 << CS31) |
+                (1 << CS30));
 
-       F_CPU / 64
-
-       CS31 = 1
-       CS30 = 1
-       CS32 = 0
-    */
-
-    TCCR3B |= (1 << 1) |
-              (1 << 0);
+    /* Set prescaler to 64 and start Timer3 */
+    TCCR3B |= (1 << CS31) | (1 << CS30);
 }
 
-
-/* ============================================================
-   PWM_Stop
-   ============================================================ */
-
+/* Stop PWM by stopping Timer3 */
 void PWM_Stop(void)
 {
-    /*
-       Stop Timer3
-
-       CS32:0 = 000
-    */
-
-    TCCR3B &= ~((1 << 2) |
-                (1 << 1) |
-                (1 << 0));
+    /* Clear all Timer3 clock-select bits */
+    TCCR3B &= ~((1 << CS32) |
+                (1 << CS31) |
+                (1 << CS30));
 }

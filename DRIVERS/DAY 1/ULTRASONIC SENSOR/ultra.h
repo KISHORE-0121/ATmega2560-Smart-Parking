@@ -1,12 +1,11 @@
 #ifndef ULTRA_H
 #define ULTRA_H
 
-#include <stdint.h>
-
-/* Initialize ultrasonic sensor */
+/* Initialize the ultrasonic sensor and Timer4 */
 void ULTRA_Init(void);
 
-/* Return distance in centimeters */
+/* Measure distance in centimeters
+   Returns 0 if no valid echo is received */
 unsigned int ULTRA_GetDistanceCm(void);
 
 #endif

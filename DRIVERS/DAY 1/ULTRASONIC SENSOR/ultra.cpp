@@ -1,334 +1,122 @@
 #include "ultra.h"
-
-
-/* ============================================================
-   ATmega2560 ULTRASONIC DRIVER
-
-   SENSOR:
-   HC-SR04 / compatible ultrasonic sensor
-
-   TRIGGER:
-   PB1
-
-   ECHO:
-   PB2
-
-
-   TIMER:
-   TIMER4
-
-   TIMER MODE:
-   Normal Mode
-
-   CPU CLOCK:
-   16 MHz
-
-   PRESCALER:
-   8
-
-   TIMER CLOCK:
-
-   16 MHz / 8
-   = 2 MHz
-
-   TIMER TICK:
-
-   1 / 2 MHz
-   = 0.5 us
-   ============================================================ */
-
-
-/* ============================================================
-   PORT B REGISTERS
-   ============================================================ */
-
-#define PINB  (*(volatile uint8_t *)0x23)
-#define DDRB  (*(volatile uint8_t *)0x24)
-#define PORTB (*(volatile uint8_t *)0x25)
-
-
-/* ============================================================
-   TIMER4 REGISTERS
-   ============================================================ */
-
-#define TCCR4A (*(volatile uint8_t *)0xA0)
-#define TCCR4B (*(volatile uint8_t *)0xA1)
-
-#define TCNT4L (*(volatile uint8_t *)0xA4)
-#define TCNT4H (*(volatile uint8_t *)0xA5)
-
-
-/* ============================================================
-   ULTRASONIC PINS
-   ============================================================ */
-
-#define TRIG_BIT 1       /* PB1 */
-#define ECHO_BIT 2       /* PB2 */
-
-
-/* ============================================================
-   TIMER SETTINGS
-   ============================================================ */
-
-#define ULTRA_TIMEOUT_TICKS 50000U
-
+#include "gpio.h"
+#include "timer.h"
+#include <stdint.h>
 
 /*
-   50000 ticks × 0.5 us
-   = 25000 us
-   = 25 ms
+ * Ultrasonic sensor connections:
+ * TRIG -> PB1 (Arduino Mega D52)
+ * ECHO -> PB2 (Arduino Mega D51)
+ *
+ * Timer4:
+ * Prescaler = 8
+ * Timer tick = 0.5 us at 16 MHz
+ */
 
-   This gives a reasonable timeout for a
-   parking-distance application.
-*/
+#define ULTRA_TRIG_PIN  1
+#define ULTRA_ECHO_PIN  2
 
+/* Maximum time allowed while waiting for an echo */
+#define ULTRA_TIMEOUT_TICKS 50000UL
 
-/* ============================================================
-   ULTRA_TIMER_RESET
-   ============================================================ */
-
+/* Reset Timer4 counter to zero */
 static void ULTRA_TimerReset(void)
 {
-    TCNT4H = 0x00;
-    TCNT4L = 0x00;
+    TCNT4H = 0;
+    TCNT4L = 0;
 }
 
-
-/* ============================================================
-   ULTRA_TimerRead
-   ============================================================ */
-
+/* Read the current 16-bit Timer4 counter */
 static uint16_t ULTRA_TimerRead(void)
 {
     uint8_t low;
     uint8_t high;
 
-    /*
-       Read low byte first.
-    */
-
+    /* Read low byte first to latch the high byte */
     low = TCNT4L;
-
-    /*
-       Then read high byte.
-    */
-
     high = TCNT4H;
 
+    /* Combine high and low bytes */
     return ((uint16_t)high << 8) | low;
 }
 
-
-/* ============================================================
-   ULTRA_Delay10us
-   ============================================================ */
-
+/* Generate an approximate 10 us delay using Timer4 */
 static void ULTRA_Delay10us(void)
 {
-    /*
-       Timer4 tick = 0.5 us
-
-       10 us / 0.5 us
-       = 20 ticks
-    */
-
     ULTRA_TimerReset();
 
-    while (ULTRA_TimerRead() < 20U)
+    /* 20 ticks x 0.5 us = 10 us */
+    while (ULTRA_TimerRead() < 20)
     {
-        /*
-           Wait approximately 10 us
-        */
     }
 }
 
-
-/* ============================================================
-   ULTRA_Init
-   ============================================================ */
-
+/* Initialize GPIO pins and Timer4 */
 void ULTRA_Init(void)
 {
-    /* --------------------------------------------------------
-       TRIG = OUTPUT
-       -------------------------------------------------------- */
+    /* Configure TRIG as output */
+    SETIO(&DDRB, ULTRA_TRIG_PIN, OUTPUT);
 
-    DDRB |= (1 << TRIG_BIT);
+    /* Configure ECHO as input */
+    SETIO(&DDRB, ULTRA_ECHO_PIN, INPUT);
 
+    /* Keep TRIG LOW initially */
+    OUT_WRITE(&PORTB, ULTRA_TRIG_PIN, LOW);
 
-    /* --------------------------------------------------------
-       ECHO = INPUT
-       -------------------------------------------------------- */
+    /* Select Timer4 normal mode */
+    TCCR4A = 0;
+    TCCR4B = 0;
 
-    DDRB &= ~(1 << ECHO_BIT);
-
-
-    /* --------------------------------------------------------
-       TRIG initially LOW
-       -------------------------------------------------------- */
-
-    PORTB &= ~(1 << TRIG_BIT);
-
-
-    /* --------------------------------------------------------
-       TIMER4 NORMAL MODE
-       -------------------------------------------------------- */
-
-    TCCR4A = 0x00;
-
-
-    /*
-       Timer4:
-
-       CS42 = 0
-       CS41 = 1
-       CS40 = 0
-
-       Prescaler = 8
-    */
-
-    TCCR4B = (1 << 1);
-
-
-    /* --------------------------------------------------------
-       Reset timer
-       -------------------------------------------------------- */
-
+    /* Clear Timer4 counter */
     ULTRA_TimerReset();
+
+    /* Start Timer4 with prescaler 8 */
+    TCCR4B = (1 << CS41);
 }
 
-
-/* ============================================================
-   ULTRA_GetDistanceCm
-   ============================================================ */
-
+/* Trigger the sensor and measure echo pulse duration */
 unsigned int ULTRA_GetDistanceCm(void)
 {
-    uint16_t start_time;
-    uint16_t end_time;
+    uint16_t start;
     uint16_t echo_time;
 
-
-    /* --------------------------------------------------------
-       Make sure trigger is LOW
-       -------------------------------------------------------- */
-
-    PORTB &= ~(1 << TRIG_BIT);
-
-
-    /*
-       Small settling delay
-    */
-
+    /* Ensure TRIG is LOW before the pulse */
+    OUT_WRITE(&PORTB, ULTRA_TRIG_PIN, LOW);
     ULTRA_Delay10us();
 
-
-    /* --------------------------------------------------------
-       Send trigger pulse
-       -------------------------------------------------------- */
-
-    PORTB |= (1 << TRIG_BIT);
-
-
-    /*
-       Trigger HIGH for approximately 10 us
-    */
-
+    /* Send the trigger pulse */
+    OUT_WRITE(&PORTB, ULTRA_TRIG_PIN, HIGH);
     ULTRA_Delay10us();
+    OUT_WRITE(&PORTB, ULTRA_TRIG_PIN, LOW);
 
-
-    /*
-       End trigger pulse
-    */
-
-    PORTB &= ~(1 << TRIG_BIT);
-
-
-    /* --------------------------------------------------------
-       Reset Timer4
-       -------------------------------------------------------- */
-
+    /* Reset timer before waiting for ECHO */
     ULTRA_TimerReset();
 
-
-    /* --------------------------------------------------------
-       Wait for ECHO to become HIGH
-       -------------------------------------------------------- */
-
-    while ((PINB & (1 << ECHO_BIT)) == 0)
+    /* Wait until ECHO becomes HIGH */
+    while (READ(&PINB, ULTRA_ECHO_PIN) == LOW)
     {
-        /*
-           If ECHO never becomes HIGH,
-           return 0 instead of waiting forever.
-        */
-
+        /* Return 0 if the echo does not arrive */
         if (ULTRA_TimerRead() > ULTRA_TIMEOUT_TICKS)
-        {
             return 0;
-        }
     }
 
+    /* Save the starting timer count */
+    start = ULTRA_TimerRead();
 
-    /* --------------------------------------------------------
-       ECHO became HIGH
-
-       Save starting time
-       -------------------------------------------------------- */
-
-    start_time = ULTRA_TimerRead();
-
-
-    /* --------------------------------------------------------
-       Wait for ECHO to become LOW
-       -------------------------------------------------------- */
-
-    while ((PINB & (1 << ECHO_BIT)) != 0)
+    /* Wait until ECHO becomes LOW */
+    while (READ(&PINB, ULTRA_ECHO_PIN) == HIGH)
     {
-        /*
-           Timeout protection.
-
-           Unsigned subtraction also handles
-           timer wrap-around correctly.
-        */
-
-        if ((uint16_t)(ULTRA_TimerRead() - start_time)
-            > ULTRA_TIMEOUT_TICKS)
-        {
+        /* Return 0 if the echo pulse takes too long */
+        if ((uint16_t)(ULTRA_TimerRead() - start) >
+            ULTRA_TIMEOUT_TICKS)
             return 0;
-        }
     }
 
+    /* Calculate the echo pulse duration in timer ticks */
+    echo_time = (uint16_t)(ULTRA_TimerRead() - start);
 
-    /* --------------------------------------------------------
-       Save ending time
-       -------------------------------------------------------- */
-
-    end_time = ULTRA_TimerRead();
-
-
-    /* --------------------------------------------------------
-       Calculate ECHO pulse width
-       -------------------------------------------------------- */
-
-    echo_time = end_time - start_time;
-
-
-    /* --------------------------------------------------------
-       Convert timer ticks to distance
-
-       Timer tick = 0.5 us
-
-       echo_time × 0.5
-       = time in microseconds
-
-       Distance(cm)
-       ≈ time(us) / 58
-
-       Therefore:
-
-       Distance
-       ≈ echo_time / 116
-       -------------------------------------------------------- */
-
-    return (unsigned int)(echo_time / 116U);
+    /* Convert ticks to centimeters:
+       1 tick = 0.5 us
+       Distance in cm = echo_time / 116 */
+    return (unsigned int)(echo_time / 116);
 }
