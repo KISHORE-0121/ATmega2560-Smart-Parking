@@ -1,173 +1,57 @@
 #include "timer.h"
 
+/* Timer1: 1 ms time base
+   CPU frequency = 16 MHz
+   Prescaler     = 64
+   Timer clock   = 250 kHz
+   OCR1A         = 249
 
-/* ============================================================
-   ATmega2560 TIMER1
-
-   PURPOSE:
-   System delay
-
-   MODE:
-   CTC
-
-   CPU CLOCK:
-   16 MHz
-
-   PRESCALER:
-   64
-
-   TIMER CLOCK:
-
-   16 MHz / 64
-   = 250 kHz
-
-   TIMER TICK:
-
-   1 / 250000
-   = 4 us
-
-   For 1 ms:
-
-   1000 us / 4 us
-   = 250 counts
-
-   OCR1A = 249
-
-   Therefore:
-
-   One compare match = approximately 1 ms
-   ============================================================ */
-
-
-/* ---------- TIMER1 REGISTERS ---------- */
-
-#define TCCR1A (*(volatile uint8_t *)0x80)
-#define TCCR1B (*(volatile uint8_t *)0x81)
-
-#define TCNT1L (*(volatile uint8_t *)0x84)
-#define TCNT1H (*(volatile uint8_t *)0x85)
-
-#define OCR1AL (*(volatile uint8_t *)0x88)
-#define OCR1AH (*(volatile uint8_t *)0x89)
-
-#define TIFR1  (*(volatile uint8_t *)0x36)
-
-
-/* ---------- TIMER1 BITS ---------- */
-
-#define WGM12  3
-
-#define CS11   1
-#define CS10   0
-
-#define OCF1A  1
-
-
-/* ============================================================
-   TIMER_Init
-   ============================================================ */
+   Compare period = (249 + 1) / 250000
+                  = 1 ms
+*/
 
 void TIMER_Init(void)
 {
-    /*
-       CTC MODE
+    /* Stop Timer1 */
+    TCCR1A = 0;
+    TCCR1B = 0;
 
-       WGM13 = 0
-       WGM12 = 1
-       WGM11 = 0
-       WGM10 = 0
+    /* Set Timer1 to CTC mode */
+    TCCR1B |= (1 << WGM12);
 
-       Mode = CTC
-    */
-
-    TCCR1A = 0x00;
-
-
-    /*
-       WGM12 = 1
-
-       Prescaler = 64
-
-       CS12 = 0
-       CS11 = 1
-       CS10 = 1
-    */
-
-    TCCR1B = (1 << WGM12) |
-             (1 << CS11) |
-             (1 << CS10);
-
-
-    /*
-       OCR1A = 249
-
-       Gives approximately 1 ms
-       compare interval at 16 MHz.
-    */
-
-    OCR1AH = 0x00;
+    /* Compare value for 1 ms */
+    OCR1AH = 0;
     OCR1AL = 249;
 
+    /* Reset counter */
+    TCNT1H = 0;
+    TCNT1L = 0;
 
-    /*
-       Reset timer counter
-    */
-
-    TCNT1H = 0x00;
-    TCNT1L = 0x00;
-
-
-    /*
-       Clear any pending compare flag.
-
-       Timer flags are cleared by writing 1.
-    */
-
+    /* Clear Output Compare A flag */
     TIFR1 = (1 << OCF1A);
+
+    /* Start Timer1 with prescaler 64 */
+    TCCR1B |= (1 << CS11) | (1 << CS10);
 }
 
 
-/* ============================================================
-   TIMER_Delay_ms
-   ============================================================ */
-
+/* Delay in milliseconds */
 void TIMER_Delay_ms(uint16_t ms)
 {
-    while (ms--)
+    while (ms > 0)
     {
-        /*
-           Reset Timer1 counter
-        */
+        /* Reset counter */
+        TCNT1H = 0;
+        TCNT1L = 0;
 
-        TCNT1H = 0x00;
-        TCNT1L = 0x00;
-
-
-        /*
-           Clear old compare flag
-        */
-
+        /* Clear compare-match flag */
         TIFR1 = (1 << OCF1A);
 
-
-        /*
-           Wait until Timer1 reaches OCR1A
-        */
-
-        while ((TIFR1 & (1 << OCF1A)) == 0)
+        /* Wait for 1 ms compare match */
+        while (!(TIFR1 & (1 << OCF1A)))
         {
-            /*
-               Wait
-            */
         }
 
-
-        /*
-           Clear compare flag.
-
-           Writing 1 clears the flag.
-        */
-
-        TIFR1 = (1 << OCF1A);
+        ms--;
     }
 }
